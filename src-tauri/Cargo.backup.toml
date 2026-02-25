@@ -1,0 +1,159 @@
+[package]
+name = "malou-agent"
+version = "0.1.0"
+description = "AI Agent Desktop Application with ONNX Integration"
+authors = ["develop@malou.com"]
+license = "MIT"
+repository = ""
+edition = "2021"
+
+# [workspace]
+# members = [
+#     "src-tauri"
+# ]
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+# Tauri核心依赖
+tauri = { version = "2.0", features = [] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# ONNX推理相关 (暂时注释掉有问题的依赖)
+# tract-core = "0.20"
+# tract-onnx = "0.20"
+
+# 数据库相关
+rusqlite = { version = "0.31", features = ["bundled"] }
+r2d2 = "0.8"
+r2d2_sqlite = "0.24"
+
+# HTTP客户端
+reqwest = { version = "0.12", features = ["json"] }
+
+# 异步运行时
+tokio = { version = "1.35", features = ["full"] }
+tokio-util = "0.7"
+
+# 并发和并行处理
+rayon = "1.7"
+async-trait = "0.1"
+
+# 内存映射和优化
+memmap2 = "0.9"
+simd = "0.2"
+
+# 实用工具
+anyhow = "1.0"
+thiserror = "1.0"
+log = "0.4"
+env_logger = "0.11"
+
+# 数值计算 (暂时注释掉有问题的依赖)
+# ndarray = "0.15"
+# rand = "0.8"
+
+# 配置管理
+config = "0.13"
+yaml-rust = "0.4"
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[features]
+# 默认特性
+default = ["custom-protocol"]
+
+# 自定义协议支持
+custom-protocol = ["tauri/custom-protocol"]
+
+[target."cfg(windows)".build-dependencies]
+winres = "0.1"
+
+[profile.dev]
+opt-level = 0
+debug = true
+split-debuginfo = "..."  # 仅在macOS上有效
+debug-assertions = true
+overflow-checks = true
+lto = false
+panic = "unwind"
+incremental = true
+codegen-units = 256
+rpath = false
+
+[profile.release]
+opt-level = 3
+debug = false
+split-debuginfo = "..."  # 仅在macOS上有效
+debug-assertions = false
+overflow-checks = false
+lto = "thin"
+panic = "abort"
+incremental = false
+codegen-units = 1
+rpath = false
+
+[profile.bench]
+opt-level = 3
+debug = false
+split-debuginfo = "..."  # 仅在macOS上有效
+debug-assertions = false
+overflow-checks = false
+lto = "fat"
+panic = "abort"
+incremental = false
+codegen-units = 1
+rpath = false
+
+# 条件编译配置
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+# 交叉编译目标配置
+[package.metadata.winres]
+OriginalFilename = "MalouAgent.exe"
+LegalCopyright = "Copyright © 2024 Malou Inc."
+
+# Tauri配置
+[package.metadata.tauri]
+# 应用标识符
+identifier = "com.malou.agent"
+
+# 应用图标
+icon = [
+    "icons/32x32.png",
+    "icons/128x128.png",
+    "icons/128x128@2x.png",
+    "icons/icon.icns",
+    "icons/icon.ico"
+]
+
+# 应用资源文件
+resources = [
+    "models/**/*",
+    "config/**/*"
+]
+
+# 应用版本信息
+version = "0.1.0"
+shortDescription = "AI Agent Desktop Application"
+longDescription = """
+A desktop application for AI-powered assistance with local ONNX model inference
+and vector database integration for enhanced knowledge management capabilities.
+"""
+
+# 应用依赖的系统库（仅限Linux）
+deb = { depends = ["libwebkit2gtk-4.1-dev", "libappindicator3-dev", "librsvg2-dev"] }
+
+# macOS特定配置
+macos = { frameworks = [], minimumSystemVersion = "10.13", exceptionDomain = "" }
+
+# Windows特定配置
+[package.metadata.windows]
+certificate_thumbprint = ""
+digest_algorithm = "sha256"
+timestamp_url = ""
