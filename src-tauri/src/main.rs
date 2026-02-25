@@ -1,86 +1,140 @@
-mod database;
-mod onnx;
-mod vector_search;
-mod concurrency;
-mod db_test;
-
-use specta::Type;
-use tauri_specta::Event;
+use tauri::Manager;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
-#[derive(Type, Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct MessageRequest {
-    pub content: String,
-    pub conversation_id: Option<String>,
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct AppInfo {
+    name: String,
+    version: String,
+    description: String,
 }
 
-#[derive(Type, Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct MessageResponse {
-    pub content: String,
-    pub conversation_id: String,
-    pub timestamp: String,
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct Message {
+    id: String,
+    content: String,
+    timestamp: String,
+    is_user: bool,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct OpenAIConfig {
+    api_key: String,
+    api_base: String,
+    model: String,
+    temperature: f32,
+}
+
+struct AppState {
+    messages: Arc<Mutex<Vec<Message>>>,
+    openai_config: Arc<Mutex<OpenAIConfig>>,
+}
+
+// Tauri命令：获取应用信息
 #[tauri::command]
-#[specta::specta]
-async fn send_message(request: MessageRequest) -> Result<MessageResponse, String> {
-    // 模拟处理消息
-    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-    
-    Ok(MessageResponse {
-        content: format!("Echo: {}", request.content),
-        conversation_id: request.conversation_id.unwrap_or_else(|| "default".to_string()),
-        timestamp: chrono::Utc::now().to_rfc3339(),
+async fn get_app_info() -> Result<AppInfo, String> {
+    Ok(AppInfo {
+        name: "Malou Agent".to_string(),
+        version: "0.1.0".to_string(),
+        description: "Windows桌面AI助手".to_string(),
     })
 }
 
+// Tauri命令：发送消息
 #[tauri::command]
-#[specta::specta]
-async fn search_knowledge(query: String) -> Result<Vec<String>, String> {
-    // 模拟知识库搜索
-    Ok(vec![
-        format!("搜索结果1: {}", query),
-        format!("搜索结果2: {}", query),
-    ])
+async fn send_message(
+    content: String,
+    state: tauri::State<'_, AppState>
+) -> Result<Message, String> {
+    let mut messages = state.messages.lock().await;
+    
+    // 创建用户消息
+    let user_message = Message {
+        id: uuid::Uuid::new_v4().to_string(),
+        content: content.clone(),
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        is_user: true,
+    };
+    
+    messages.push(user_message.clone());
+    
+    // 创建AI回复（简单echo，后续接入OpenAI）
+    let ai_message = Message {
+        id: uuid::Uuid::new_v4().to_string(),
+        content: format!("AI回复: {}", content),
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        is_user: false,
+    };
+    
+    messages.push(ai_message.clone());
+    
+    Ok(ai_message)
 }
 
+// Tauri命令：获取消息历史
 #[tauri::command]
-#[specta::specta]
-async fn run_skill(skill_name: String, params: serde_json::Value) -> Result<serde_json::Value, String> {
-    // 模拟技能执行
-    Ok(serde_json::json!({
-        "result": format!("执行技能: {}", skill_name),
-        "params": params
-    }))
+async fn get_messages(
+    state: tauri::State<'_, AppState>
+) -> Result<Vec<Message>, String> {
+    let messages = state.messages.lock().await;
+    Ok(messages.clone())
 }
 
+// Tauri命令：清空消息历史
 #[tauri::command]
-#[specta::specta]
-async fn embed_text(text: String) -> Result<Vec<f32>, String> {
-    // 模拟文本嵌入
-    Ok(vec![0.1, 0.2, 0.3, 0.4])
+async fn clear_messages(
+    state: tauri::State<'_, AppState>
+) -> Result<(), String> {
+    let mut messages = state.messages.lock().await;
+    messages.clear();
+    Ok(())
 }
 
+// Tauri命令：获取OpenAI配置
 #[tauri::command]
-#[specta::specta]
-async fn test_database() -> Result<String, String> {
-    match db_test::test_database_operations().await {
-        Ok(_) => Ok("数据库测试通过".to_string()),
-        Err(e) => Err(format!("数据库测试失败: {}", e)),
-    }
+async fn get_openai_config(
+    state: tauri::State<'_, AppState>
+) -> Result<OpenAIConfig, String> {
+    let config = state.openai_config.lock().await;
+    Ok(config.clone())
+}
+
+// Tauri命令：保存OpenAI配置
+#[tauri::command]
+async fn save_openai_config(
+    config: OpenAIConfig,
+    state: tauri::State<'_, AppState>
+) -> Result<(), String> {
+    let mut openai_config = state.openai_config.lock().await;
+    *openai_config = config;
+    println!("OpenAI配置已保存: {:?}", openai_config);
+    Ok(())
 }
 
 fn main() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
+        .manage(AppState {
+            messages: Arc::new(Mutex::new(Vec::new())),
+            openai_config: Arc::new(Mutex::new(OpenAIConfig {
+                api_key: "".to_string(),
+                api_base: "https://api.openai.com/v1".to_string(),
+                model: "gpt-3.5-turbo".to_string(),
+                temperature: 0.7,
+            })),
+        })
+        .setup(|app| {
+            println!("Malou Agent桌面应用启动成功!");
+            println!("应用路径: {:?}", app.path().app_data_dir());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
+            get_app_info,
             send_message,
-            search_knowledge,
-            run_skill,
-            embed_text,
-            test_database
+            get_messages,
+            clear_messages,
+            get_openai_config,
+            save_openai_config
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
