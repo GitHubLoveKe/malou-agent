@@ -1,9 +1,34 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import ChatView from './components/business/ChatView.vue'
+import ConversationList from './components/business/ConversationList.vue'
 import DocumentManager from './components/business/DocumentManager.vue'
+import ModelSettings from './components/settings/ModelSettings.vue'
+import type { Conversation } from './api/tauri-api'
 
 const activeTab = ref('chat')
+const currentConversation = ref<Conversation | null>(null)
+const conversationListRef = ref<InstanceType<typeof ConversationList> | null>(null)
+
+// 选择会话
+const handleSelectConversation = (conversation: Conversation) => {
+  currentConversation.value = conversation
+}
+
+// 创建会话后自动选择
+const handleCreateConversation = (conversation: Conversation) => {
+  currentConversation.value = conversation
+}
+
+// 会话更新后刷新列表
+const handleConversationUpdated = () => {
+  conversationListRef.value?.refresh()
+}
+
+// 打开设置页面
+const handleOpenSettings = () => {
+  activeTab.value = 'settings'
+}
 </script>
 
 <template>
@@ -19,11 +44,32 @@ const activeTab = ref('chat')
       </el-header>
       
       <el-main class="app-main">
-        <ChatView v-if="activeTab === 'chat'" />
+        <!-- 聊天页面：带侧边栏 -->
+        <template v-if="activeTab === 'chat'">
+          <div class="chat-layout">
+            <div class="chat-sidebar">
+              <ConversationList 
+                ref="conversationListRef"
+                :current-id="currentConversation?.id ?? null"
+                @select="handleSelectConversation"
+                @create="handleCreateConversation"
+              />
+            </div>
+            <div class="chat-main">
+              <ChatView 
+                :conversation="currentConversation"
+                @conversation-updated="handleConversationUpdated"
+                @open-settings="handleOpenSettings"
+              />
+            </div>
+          </div>
+        </template>
+        
+        <!-- 知识库页面 -->
         <DocumentManager v-else-if="activeTab === 'knowledge'" />
-        <div v-else-if="activeTab === 'settings'">
-          <h2>设置功能待实现</h2>
-        </div>
+        
+        <!-- 设置页面 -->
+        <ModelSettings v-else-if="activeTab === 'settings'" />
       </el-main>
     </el-container>
   </div>
@@ -51,6 +97,24 @@ const activeTab = ref('chat')
 
 .app-main {
   padding: 0;
+  overflow: hidden;
+}
+
+.chat-layout {
+  display: flex;
+  height: 100%;
+}
+
+.chat-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.chat-main {
+  flex: 1;
+  height: 100%;
   overflow: hidden;
 }
 </style>
