@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, Edit, ChatLineRound } from '@element-plus/icons-vue'
 import { 
   listConversations, 
   createConversation, 
@@ -24,73 +23,60 @@ const loading = ref(false)
 const editingId = ref<string | null>(null)
 const editTitle = ref('')
 
-// 格式化时间
+// Format time
 const formatTime = (dateStr: string): string => {
   const date = new Date(dateStr)
   const now = new Date()
   const diff = now.getTime() - date.getTime()
   
-  // 小于 1 分钟
-  if (diff < 60000) {
-    return '刚刚'
-  }
-  // 小于 1 小时
-  if (diff < 3600000) {
-    return `${Math.floor(diff / 60000)} 分钟前`
-  }
-  // 小于 24 小时
-  if (diff < 86400000) {
-    return `${Math.floor(diff / 3600000)} 小时前`
-  }
-  // 小于 7 天
-  if (diff < 604800000) {
-    return `${Math.floor(diff / 86400000)} 天前`
-  }
-  // 其他
-  return date.toLocaleDateString('zh-CN')
+  if (diff < 60000) return 'Just now'
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
+  if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`
+  return date.toLocaleDateString('en-US')
 }
 
-// 加载会话列表
+// Load conversations
 const loadConversations = async () => {
   loading.value = true
   try {
     conversations.value = await listConversations(50, 0)
   } catch (error) {
-    console.error('加载会话列表失败:', error)
-    ElMessage.error('加载会话列表失败')
+    console.error('Failed to load conversations:', error)
+    ElMessage.error('Failed to load conversations')
   } finally {
     loading.value = false
   }
 }
 
-// 创建新会话
+// Create new conversation
 const handleCreate = async () => {
   try {
-    const title = `新会话 ${conversations.value.length + 1}`
+    const title = `New Chat ${conversations.value.length + 1}`
     const conversation = await createConversation(title)
     conversations.value.unshift(conversation)
     emit('create', conversation)
     emit('select', conversation)
-    ElMessage.success('会话创建成功')
+    ElMessage.success('Conversation created')
   } catch (error) {
-    console.error('创建会话失败:', error)
-    ElMessage.error('创建会话失败')
+    console.error('Failed to create conversation:', error)
+    ElMessage.error('Failed to create conversation')
   }
 }
 
-// 选择会话
+// Select conversation
 const handleSelect = (conversation: Conversation) => {
   emit('select', conversation)
 }
 
-// 开始编辑标题
+// Start edit title
 const startEdit = (conversation: Conversation, event: Event) => {
   event.stopPropagation()
   editingId.value = conversation.id
   editTitle.value = conversation.title
 }
 
-// 保存标题
+// Save title
 const saveTitle = async (conversation: Conversation) => {
   if (!editTitle.value.trim()) {
     editingId.value = null
@@ -100,31 +86,31 @@ const saveTitle = async (conversation: Conversation) => {
   try {
     await updateConversationTitle(conversation.id, editTitle.value.trim())
     conversation.title = editTitle.value.trim()
-    ElMessage.success('标题已更新')
+    ElMessage.success('Title updated')
   } catch (error) {
-    console.error('更新标题失败:', error)
-    ElMessage.error('更新标题失败')
+    console.error('Failed to update title:', error)
+    ElMessage.error('Failed to update title')
   } finally {
     editingId.value = null
   }
 }
 
-// 取消编辑
+// Cancel edit
 const cancelEdit = () => {
   editingId.value = null
 }
 
-// 删除会话
+// Delete conversation
 const handleDelete = async (conversation: Conversation, event: Event) => {
   event.stopPropagation()
   
   try {
     await ElMessageBox.confirm(
-      `确定要删除会话 "${conversation.title}" 吗？此操作不可恢复。`,
-      '删除确认',
+      `Delete conversation "${conversation.title}"? This cannot be undone.`,
+      'Confirm Delete',
       {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
+        confirmButtonText: 'Delete',
+        cancelButtonText: 'Cancel',
         type: 'warning',
       }
     )
@@ -132,26 +118,24 @@ const handleDelete = async (conversation: Conversation, event: Event) => {
     await deleteConversation(conversation.id)
     conversations.value = conversations.value.filter(c => c.id !== conversation.id)
     
-    // 如果删除的是当前选中的会话，选择第一个会话
     if (props.currentId === conversation.id && conversations.value.length > 0) {
       emit('select', conversations.value[0])
     }
     
-    ElMessage.success('会话已删除')
+    ElMessage.success('Conversation deleted')
   } catch (error) {
     if (error !== 'cancel') {
-      console.error('删除会话失败:', error)
-      ElMessage.error('删除会话失败')
+      console.error('Failed to delete conversation:', error)
+      ElMessage.error('Failed to delete conversation')
     }
   }
 }
 
-// 刷新列表
+// Refresh list
 const refresh = () => {
   loadConversations()
 }
 
-// 暴露方法给父组件
 defineExpose({
   refresh,
   loadConversations
@@ -165,15 +149,16 @@ onMounted(() => {
 <template>
   <div class="conversation-list">
     <div class="list-header">
-      <span class="header-title">会话列表</span>
-      <el-button 
-        type="primary" 
-        :icon="Plus" 
-        circle 
-        size="small"
+      <span class="header-title">Chats</span>
+      <button 
+        class="add-btn"
         @click="handleCreate"
-        title="新建会话"
-      />
+        title="New Chat"
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18">
+          <path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+        </svg>
+      </button>
     </div>
     
     <div class="list-content" v-loading="loading">
@@ -184,17 +169,19 @@ onMounted(() => {
         @click="handleSelect(conversation)"
       >
         <div class="item-icon">
-          <el-icon><ChatLineRound /></el-icon>
+          <svg viewBox="0 0 24 24" width="18" height="18">
+            <path fill="currentColor" d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/>
+          </svg>
         </div>
         
         <div class="item-content">
           <div class="item-title" v-if="editingId !== conversation.id">
             {{ conversation.title }}
           </div>
-          <el-input
+          <input
             v-else
             v-model="editTitle"
-            size="small"
+            class="title-input"
             @blur="saveTitle(conversation)"
             @keyup.enter="saveTitle(conversation)"
             @keyup.escape="cancelEdit"
@@ -202,36 +189,46 @@ onMounted(() => {
             autofocus
           />
           <div class="item-meta">
-            <span class="meta-count">{{ conversation.message_count }} 条消息</span>
+            <span class="meta-count">{{ conversation.message_count }} messages</span>
             <span class="meta-time">{{ formatTime(conversation.updated_at) }}</span>
           </div>
         </div>
         
         <div class="item-actions" v-if="editingId !== conversation.id">
-          <el-button 
-            :icon="Edit" 
-            circle 
-            size="small"
+          <button 
+            class="action-btn"
             @click="startEdit(conversation, $event)"
-            title="编辑标题"
-          />
-          <el-button 
-            :icon="Delete" 
-            circle 
-            size="small"
-            type="danger"
+            title="Edit Title"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16">
+              <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+            </svg>
+          </button>
+          <button 
+            class="action-btn danger"
             @click="handleDelete(conversation, $event)"
-            title="删除会话"
-          />
+            title="Delete"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16">
+              <path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+            </svg>
+          </button>
         </div>
       </div>
       
       <div v-if="conversations.length === 0 && !loading" class="empty-state">
-        <p>暂无会话</p>
-        <el-button type="primary" @click="handleCreate">
-          <el-icon><Plus /></el-icon>
-          新建会话
-        </el-button>
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24" width="48" height="48">
+            <path fill="currentColor" d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/>
+          </svg>
+        </div>
+        <p>No conversations yet</p>
+        <button class="create-btn" @click="handleCreate">
+          <svg viewBox="0 0 24 24" width="18" height="18">
+            <path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+          </svg>
+          New Chat
+        </button>
       </div>
     </div>
   </div>
@@ -242,23 +239,40 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background-color: #f5f7fa;
-  border-right: 1px solid #e4e7ed;
+  background-color: var(--color-bg);
 }
 
 .list-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px;
-  border-bottom: 1px solid #e4e7ed;
-  background-color: #fff;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .header-title {
   font-weight: 600;
   font-size: 14px;
-  color: #303133;
+  color: var(--color-text);
+}
+
+.add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: white;
+  transition: all 0.2s ease;
+}
+
+.add-btn:hover {
+  background: #0066DD;
+  transform: scale(1.05);
 }
 
 .list-content {
@@ -272,24 +286,33 @@ onMounted(() => {
   align-items: flex-start;
   padding: 12px;
   margin-bottom: 4px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s;
-  background-color: #fff;
+  transition: all 0.2s ease;
+  background: transparent;
 }
 
 .conversation-item:hover {
-  background-color: #ecf5ff;
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .conversation-item.active {
-  background-color: #409eff;
-  color: #fff;
+  background: var(--color-primary);
+  box-shadow: var(--shadow-md);
 }
 
+.conversation-item.active:hover {
+  background: var(--color-primary);
+}
+
+.conversation-item.active .item-title,
 .conversation-item.active .meta-count,
 .conversation-item.active .meta-time {
-  color: rgba(255, 255, 255, 0.8);
+  color: white;
+}
+
+.conversation-item.active .item-icon {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .item-icon {
@@ -299,13 +322,15 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background-color: #f0f0f0;
+  background: rgba(0, 0, 0, 0.06);
   margin-right: 12px;
   flex-shrink: 0;
+  color: var(--color-text-secondary);
+  transition: all 0.2s ease;
 }
 
 .conversation-item.active .item-icon {
-  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
 }
 
 .item-content {
@@ -320,6 +345,17 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   margin-bottom: 4px;
+  color: var(--color-text);
+}
+
+.title-input {
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  outline: none;
+  margin-bottom: 4px;
 }
 
 .item-meta {
@@ -331,7 +367,7 @@ onMounted(() => {
 
 .meta-count,
 .meta-time {
-  color: #909399;
+  color: var(--color-text-secondary);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -351,16 +387,67 @@ onMounted(() => {
   display: flex;
 }
 
+.action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--color-text);
+}
+
+.action-btn.danger:hover {
+  background: rgba(255, 59, 48, 0.1);
+  color: var(--color-danger);
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 20px;
-  color: #909399;
+  padding: 60px 20px;
+  color: var(--color-text-secondary);
+}
+
+.empty-icon {
+  opacity: 0.3;
+  margin-bottom: 16px;
 }
 
 .empty-state p {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.create-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.create-btn:hover {
+  background: #0066DD;
+  transform: scale(1.02);
 }
 </style>

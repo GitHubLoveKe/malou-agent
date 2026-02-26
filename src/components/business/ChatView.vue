@@ -5,7 +5,6 @@ import {
   sendMessage, 
   getConversationMessages,
   clearConversationMessages,
-  testDatabase,
   getAppConfig,
   updateModelSelection,
   type Conversation,
@@ -36,17 +35,16 @@ const inputMessage = ref('')
 const isLoading = ref(false)
 const messagesContainer = ref<HTMLElement | null>(null)
 
-// 模型选择相关
+// Model selection
 const appConfig = ref<AppConfig | null>(null)
 const showModelSelector = ref(false)
 
-// 可用模型列表
+// Available models
 const availableModels = computed(() => {
   if (!appConfig.value) return []
   
   const models: Array<{ id: string; name: string; type: 'remote' | 'local' }> = []
   
-  // 添加启用的远程模型
   appConfig.value.remoteModels
     .filter(model => model.enabled)
     .forEach(model => {
@@ -57,14 +55,13 @@ const availableModels = computed(() => {
       })
     })
   
-  // 添加启用的本地模型
   if (appConfig.value.localModels.enabled) {
     appConfig.value.localModels.models
       .filter(model => model.enabled)
       .forEach(model => {
         models.push({
           id: model.id,
-          name: `${model.name} (本地)`,
+          name: `${model.name} (Local)`,
           type: 'local'
         })
       })
@@ -73,38 +70,38 @@ const availableModels = computed(() => {
   return models
 })
 
-// 当前选中的模型
+// Current model
 const currentModel = computed(() => {
   if (!appConfig.value) return null
   const modelId = appConfig.value.modelSelector.currentModel
   return availableModels.value.find(m => m.id === modelId) || availableModels.value[0]
 })
 
-// 加载配置
+// Load config
 const loadConfig = async () => {
   try {
     appConfig.value = await getAppConfig()
   } catch (error) {
-    console.error('加载配置失败:', error)
+    console.error('Failed to load config:', error)
   }
 }
 
-// 切换模型
+// Switch model
 const handleModelChange = async (modelId: string) => {
   try {
     await updateModelSelection(modelId)
     if (appConfig.value) {
       appConfig.value.modelSelector.currentModel = modelId
     }
-    ElMessage.success('模型切换成功')
+    ElMessage.success('Model switched')
     showModelSelector.value = false
   } catch (error) {
-    console.error('切换模型失败:', error)
-    ElMessage.error('切换模型失败')
+    console.error('Failed to switch model:', error)
+    ElMessage.error('Failed to switch model')
   }
 }
 
-// 将 API 消息转换为显示消息
+// Convert API message to display message
 const convertMessage = (msg: ApiMessage): DisplayMessage => ({
   id: msg.id,
   content: msg.content,
@@ -113,7 +110,7 @@ const convertMessage = (msg: ApiMessage): DisplayMessage => ({
   tokens: msg.total_tokens
 })
 
-// 加载会话消息
+// Load conversation messages
 const loadMessages = async () => {
   if (!props.conversation) {
     messages.value = []
@@ -124,26 +121,24 @@ const loadMessages = async () => {
     const apiMessages = await getConversationMessages(props.conversation.id, 100, 0)
     messages.value = apiMessages.map(convertMessage)
     
-    // 如果没有消息，添加欢迎消息
     if (messages.value.length === 0) {
       messages.value.push({
         id: 'welcome',
-        content: '您好！我是Malou Agent，您的AI助手。请问有什么可以帮助您的吗？',
+        content: 'Hi! I\'m Malou Agent, your AI assistant. How can I help you today?',
         sender: 'ai',
         timestamp: new Date()
       })
     }
     
-    // 滚动到底部
     await nextTick()
     scrollToBottom()
   } catch (error) {
-    console.error('加载消息失败:', error)
-    ElMessage.error('加载消息失败')
+    console.error('Failed to load messages:', error)
+    ElMessage.error('Failed to load messages')
   }
 }
 
-// 监听会话变化
+// Watch conversation changes
 watch(() => props.conversation, () => {
   loadMessages()
 }, { immediate: true })
@@ -152,24 +147,23 @@ onMounted(() => {
   loadConfig()
 })
 
-// 滚动到底部
+// Scroll to bottom
 const scrollToBottom = () => {
   if (messagesContainer.value) {
     messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
   }
 }
 
-// 发送消息
+// Send message
 const handleSendMessage = async () => {
   if (!inputMessage.value.trim() || isLoading.value) return
   if (!props.conversation) {
-    ElMessage.warning('请先选择或创建一个会话')
+    ElMessage.warning('Please select or create a conversation')
     return
   }
   
   const userContent = inputMessage.value.trim()
   
-  // 添加用户消息到界面
   const userMessage: DisplayMessage = {
     id: `temp-${Date.now()}`,
     content: userContent,
@@ -190,10 +184,8 @@ const handleSendMessage = async () => {
       content: userContent
     })
     
-    // 更新用户消息 ID
     userMessage.id = `user-${response.id}`
     
-    // 添加 AI 回复
     const aiMessage: DisplayMessage = {
       id: response.id,
       content: response.content,
@@ -203,16 +195,14 @@ const handleSendMessage = async () => {
     }
     messages.value.push(aiMessage)
     
-    // 通知父组件更新会话信息
     emit('conversation-updated')
     
-    logger.info('消息发送成功', 'chat')
+    logger.info('Message sent successfully', 'chat')
   } catch (error) {
-    console.error('发送消息失败:', error)
-    logger.error('发送消息失败', 'chat')
-    ElMessage.error('发送消息失败')
+    console.error('Failed to send message:', error)
+    logger.error('Failed to send message', 'chat')
+    ElMessage.error('Failed to send message')
     
-    // 移除临时用户消息
     messages.value = messages.value.filter(m => m.id !== userMessage.id)
   } finally {
     isLoading.value = false
@@ -221,59 +211,37 @@ const handleSendMessage = async () => {
   }
 }
 
-// 测试数据库
-const handleTestDatabase = async () => {
-  try {
-    const result = await testDatabase()
-    logger.info(`数据库测试成功: ${result}`, 'chat')
-    ElMessage.success(result)
-    
-    const testMessage: DisplayMessage = {
-      id: `test-${Date.now()}`,
-      content: `数据库测试结果: ${result}`,
-      sender: 'ai',
-      timestamp: new Date()
-    }
-    messages.value.push(testMessage)
-  } catch (error) {
-    console.error('数据库测试失败:', error)
-    logger.error(`数据库测试失败: ${(error as Error).message}`, 'chat')
-    ElMessage.error(`数据库测试失败: ${(error as Error).message}`)
-  }
-}
-
-// 清空聊天记录
+// Clear chat history
 const handleClearChatHistory = async () => {
   if (!props.conversation) {
-    ElMessage.warning('请先选择一个会话')
+    ElMessage.warning('Please select a conversation')
     return
   }
   
   try {
-    logger.info('开始清空聊天记录', 'chat')
+    logger.info('Clearing chat history', 'chat')
     
     await clearConversationMessages(props.conversation.id)
     
-    // 清空界面消息，添加确认消息
     messages.value = [{
       id: `clear-${Date.now()}`,
-      content: '聊天记录已清空',
+      content: 'Chat history cleared',
       sender: 'ai',
       timestamp: new Date()
     }]
     
     emit('conversation-updated')
     
-    logger.info('聊天记录清空完成', 'chat')
-    ElMessage.success('聊天记录已清空')
+    logger.info('Chat history cleared', 'chat')
+    ElMessage.success('Chat history cleared')
   } catch (error) {
-    console.error('清空聊天记录失败:', error)
-    logger.error(`清空聊天记录失败: ${(error as Error).message}`, 'chat')
-    ElMessage.error('清空聊天记录失败')
+    console.error('Failed to clear chat history:', error)
+    logger.error(`Failed to clear chat history: ${(error as Error).message}`, 'chat')
+    ElMessage.error('Failed to clear chat history')
   }
 }
 
-// 格式化时间
+// Format time
 const formatTime = (date: Date): string => {
   return date.toLocaleTimeString('zh-CN', { 
     hour: '2-digit', 
@@ -284,24 +252,24 @@ const formatTime = (date: Date): string => {
 
 <template>
   <div class="chat-container">
-    <!-- 会话标题栏 -->
+    <!-- Chat Header -->
     <div class="chat-header" v-if="conversation">
       <div class="header-main">
         <div class="header-info">
           <div class="header-title">{{ conversation.title }}</div>
           <div class="header-meta">
-            <span>{{ conversation.message_count }} 条消息</span>
+            <span>{{ conversation.message_count }} messages</span>
             <span v-if="conversation.total_tokens > 0">| {{ conversation.total_tokens }} tokens</span>
           </div>
         </div>
-        <!-- 模型选择器 -->
-        <div class="model-selector">
+        <div class="header-actions">
           <el-dropdown trigger="click" @command="handleModelChange">
-            <el-button type="primary" size="small" class="model-select-btn">
-              <el-icon><Cpu /></el-icon>
-              <span class="model-name">{{ currentModel?.name || '选择模型' }}</span>
-              <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-            </el-button>
+            <button class="model-select-btn">
+              <span class="model-name">{{ currentModel?.name || 'Select Model' }}</span>
+              <svg class="dropdown-arrow" viewBox="0 0 24 24" width="16" height="16">
+                <path fill="currentColor" d="M7 10l5 5 5-5z"/>
+              </svg>
+            </button>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item 
@@ -310,26 +278,27 @@ const formatTime = (date: Date): string => {
                   :command="model.id"
                   :class="{ 'is-active': model.id === currentModel?.id }"
                 >
-                  <el-icon v-if="model.type === 'remote'"><Connection /></el-icon>
-                  <el-icon v-else><Cpu /></el-icon>
                   <span>{{ model.name }}</span>
-                  <el-icon v-if="model.id === currentModel?.id" class="check-icon"><Check /></el-icon>
                 </el-dropdown-item>
                 <el-dropdown-item divided command="" @click="$emit('open-settings')">
-                  <el-icon><Setting /></el-icon>
-                  <span>管理模型...</span>
+                  <span>Manage Models...</span>
                 </el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
+          <button class="icon-btn" @click="handleClearChatHistory" title="Clear Chat">
+            <svg viewBox="0 0 24 24" width="18" height="18">
+              <path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+            </svg>
+          </button>
         </div>
       </div>
     </div>
     <div class="chat-header empty" v-else>
-      <div class="header-title">请选择或创建会话</div>
+      <div class="header-title">Select or create a conversation</div>
     </div>
     
-    <!-- 消息列表 -->
+    <!-- Messages -->
     <div class="chat-messages" ref="messagesContainer">
       <div 
         v-for="message in messages" 
@@ -347,7 +316,7 @@ const formatTime = (date: Date): string => {
         </div>
       </div>
       
-      <!-- 加载指示器 -->
+      <!-- Loading -->
       <div v-if="isLoading" class="message ai">
         <div class="message-content">
           <div class="message-bubble typing-indicator">
@@ -359,42 +328,28 @@ const formatTime = (date: Date): string => {
       </div>
     </div>
     
-    <!-- 输入区域 -->
+    <!-- Input Area -->
     <div class="chat-input-area">
-      <div class="input-actions">
-        <el-button 
-          type="success" 
-          size="small"
-          @click="handleTestDatabase"
+      <div class="input-wrapper">
+        <input
+          v-model="inputMessage"
+          class="message-input"
+          placeholder="Type a message..."
+          @keyup.enter="handleSendMessage"
+          :disabled="isLoading || !conversation"
+        />
+        <button 
+          class="send-btn"
+          @click="handleSendMessage"
+          :disabled="!inputMessage.trim() || !conversation"
+          :class="{ loading: isLoading }"
         >
-          测试数据库
-        </el-button>
-        <el-button 
-          type="danger" 
-          size="small"
-          @click="handleClearChatHistory"
-          :disabled="!conversation"
-        >
-          清空聊天记录
-        </el-button>
+          <svg v-if="!isLoading" viewBox="0 0 24 24" width="20" height="20">
+            <path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+          <span v-else class="loading-spinner"></span>
+        </button>
       </div>
-      <el-input
-        v-model="inputMessage"
-        placeholder="请输入消息..."
-        @keyup.enter="handleSendMessage"
-        :disabled="isLoading || !conversation"
-      >
-        <template #append>
-          <el-button 
-            type="primary" 
-            @click="handleSendMessage"
-            :loading="isLoading"
-            :disabled="!inputMessage.trim() || !conversation"
-          >
-            发送
-          </el-button>
-        </template>
-      </el-input>
     </div>
   </div>
 </template>
@@ -404,17 +359,18 @@ const formatTime = (date: Date): string => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background-color: #f5f5f5;
+  background-color: var(--color-bg-secondary);
 }
 
 .chat-header {
-  padding: 16px 20px;
-  background-color: #fff;
-  border-bottom: 1px solid #e4e4e4;
+  padding: 16px 24px;
+  background-color: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
 }
 
 .chat-header.empty {
-  color: #909399;
+  color: var(--color-text-secondary);
 }
 
 .header-main {
@@ -430,49 +386,88 @@ const formatTime = (date: Date): string => {
 .header-title {
   font-size: 16px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text);
 }
 
 .header-meta {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-secondary);
   margin-top: 4px;
 }
 
-.model-selector {
-  margin-left: 16px;
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .model-select-btn {
   display: flex;
   align-items: center;
   gap: 6px;
+  padding: 8px 14px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-text);
+  transition: all 0.2s ease;
+  font-family: inherit;
 }
 
-.model-name {
-  max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.model-select-btn:hover {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-primary);
 }
 
-.check-icon {
-  margin-left: auto;
-  color: #67c23a;
+.dropdown-arrow {
+  opacity: 0.5;
+}
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: all 0.2s ease;
+}
+
+.icon-btn:hover {
+  background: var(--color-bg);
+  color: var(--color-danger);
 }
 
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 16px;
 }
 
 .message {
   display: flex;
   width: 100%;
+  animation: messageIn 0.3s ease;
+}
+
+@keyframes messageIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .message.user {
@@ -496,51 +491,126 @@ const formatTime = (date: Date): string => {
 
 .message-bubble {
   padding: 12px 16px;
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   word-wrap: break-word;
-  line-height: 1.4;
+  line-height: 1.5;
   white-space: pre-wrap;
+  font-size: 14px;
 }
 
 .message.user .message-bubble {
-  background-color: #409eff;
+  background: var(--color-user-bubble);
   color: white;
   border-bottom-right-radius: 4px;
+  box-shadow: var(--shadow-sm);
 }
 
 .message.ai .message-bubble {
-  background-color: white;
-  color: #333;
-  border: 1px solid #e4e4e4;
+  background: var(--color-ai-bubble);
+  color: var(--color-text);
   border-bottom-left-radius: 4px;
 }
 
 .message-meta {
   display: flex;
   gap: 8px;
-  margin-top: 4px;
+  margin-top: 6px;
+  padding: 0 4px;
 }
 
 .message-time {
-  font-size: 12px;
-  color: #999;
+  font-size: 11px;
+  color: var(--color-text-secondary);
 }
 
 .message-tokens {
-  font-size: 12px;
-  color: #67c23a;
+  font-size: 11px;
+  color: var(--color-success);
 }
 
 .chat-input-area {
-  padding: 16px 20px;
-  background-color: white;
-  border-top: 1px solid #e4e4e4;
+  padding: 16px 24px 20px;
+  background: var(--color-bg-secondary);
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
 }
 
-.input-actions {
-  margin-bottom: 12px;
+.input-wrapper {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 12px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: 4px;
+  transition: all 0.2s ease;
+}
+
+.input-wrapper:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+}
+
+.message-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 12px 16px;
+  font-size: 14px;
+  color: var(--color-text);
+  outline: none;
+  font-family: inherit;
+}
+
+.message-input::placeholder {
+  color: var(--color-text-secondary);
+}
+
+.message-input:disabled {
+  opacity: 0.5;
+}
+
+.send-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: white;
+  transition: all 0.2s ease;
+}
+
+.send-btn:hover:not(:disabled) {
+  background: #0066DD;
+  transform: scale(1.05);
+}
+
+.send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.send-btn.loading {
+  background: var(--color-primary);
+}
+
+.loading-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .typing-indicator {
@@ -554,7 +624,7 @@ const formatTime = (date: Date): string => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: #999;
+  background-color: var(--color-text-secondary);
   animation: typing 1.4s infinite ease-in-out;
 }
 

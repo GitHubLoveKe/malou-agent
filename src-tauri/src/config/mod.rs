@@ -269,9 +269,26 @@ pub async fn update_app_config(
     new_config: AppConfig,
     app_handle: tauri::AppHandle
 ) -> Result<(), String> {
+    log::info!("update_app_config called");
+    
     let config_manager = app_handle.state::<std::sync::Mutex<ConfigManager>>();
     let mut manager = config_manager.lock().unwrap();
-    manager.update_config(new_config).map_err(|e| e.to_string())?;
+    manager.update_config(new_config.clone()).map_err(|e| e.to_string())?;
+    
+    // Sync OpenAI config to AppState
+    let current_model_id = &new_config.model_selector.current_model;
+    if let Some(remote_model) = new_config.remote_models.iter().find(|m| &m.id == current_model_id) {
+        if let Some(app_state) = app_handle.try_state::<super::AppState>() {
+            if let Ok(mut openai_config) = app_state.openai_config.lock() {
+                openai_config.api_key = remote_model.api_key.clone();
+                openai_config.api_base = remote_model.api_url.clone();
+                openai_config.model = remote_model.model.clone();
+                openai_config.temperature = remote_model.temperature.unwrap_or(0.7);
+                log::info!("OpenAI config synced to AppState: model={}", openai_config.model);
+            }
+        }
+    }
+    
     Ok(())
 }
 

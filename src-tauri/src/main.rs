@@ -7,11 +7,11 @@ mod database;
 mod chat;
 mod token_tracker;
 
-use config::ConfigManager;
+use config::{ConfigManager, CurrentModel};
 use database::{Database, get_default_db_path, Conversation, Message, TokenSummary, DailyTokenUsage};
 use chat::ChatService;
 
-// ============ 数据结构 ============
+// ============ Data Structures ============
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct AppInfo {
@@ -28,14 +28,14 @@ struct OpenAIConfig {
     temperature: f32,
 }
 
-/// 发送消息请求
+/// Send message request
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct SendMessageRequest {
     conversation_id: String,
     content: String,
 }
 
-/// 发送消息响应
+/// Send message response
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct SendMessageResponse {
     id: String,
@@ -48,26 +48,26 @@ struct SendMessageResponse {
     total_tokens: i32,
 }
 
-// ============ 应用状态 ============
+// ============ App State ============
 
 struct AppState {
-    db: Arc<Mutex<Database>>,  // 共享数据库连接
+    db: Arc<Mutex<Database>>,
     chat_service: Mutex<ChatService>,
     openai_config: Mutex<OpenAIConfig>,
 }
 
-// ============ 基础命令 ============
+// ============ Basic Commands ============
 
 #[tauri::command]
 async fn get_app_info() -> Result<AppInfo, String> {
     Ok(AppInfo {
         name: "Malou Agent".to_string(),
         version: "0.1.0".to_string(),
-        description: "Windows桌面AI助手".to_string(),
+        description: "Windows Desktop AI Assistant".to_string(),
     })
 }
 
-// ============ 会话管理命令 ============
+// ============ Conversation Management Commands ============
 
 #[tauri::command]
 fn create_conversation(
@@ -116,7 +116,7 @@ fn delete_conversation(
     chat_service.delete_conversation(&id)
 }
 
-// ============ 消息管理命令 ============
+// ============ Message Management Commands ============
 
 #[tauri::command]
 fn get_conversation_messages(
@@ -143,28 +143,36 @@ async fn send_message(
     request: SendMessageRequest,
     state: tauri::State<'_, AppState>
 ) -> Result<SendMessageResponse, String> {
-    // 克隆需要在异步块中使用的数据
+    log::info!("send_message called: conversation_id={}, content_len={}", 
+        request.conversation_id, request.content.len());
+    
+    // Clone data needed in async block
     let conversation_id = request.conversation_id.clone();
     let content = request.content.clone();
     
-    // 获取数据库路径，用于在 spawn_blocking 中创建新的 ChatService
+    // Get database path
     let db_path = get_default_db_path();
     
-    // 获取 OpenAI 配置
+    // Get OpenAI config
     let openai_config = {
         let config = state.openai_config.lock().unwrap();
         config.clone()
     };
     
-    // 在阻塞线程中执行数据库操作和异步 API 调用
+    log::debug!("Using OpenAI config: model={}, api_base={}", openai_config.model, openai_config.api_base);
+    
+    // Execute in blocking thread
     let result = tokio::task::spawn_blocking(move || {
-        // 创建新的数据库连接和 ChatService（因为 ChatService 不支持 Send）
+        // Create new database connection
         let db = Database::new(db_path)
-            .map_err(|e| format!("数据库连接失败: {}", e))?;
+            .map_err(|e| {
+                log::error!("Database connection failed: {}", e);
+                format!("Database connection failed: {}", e)
+            })?;
         
         let chat_service = ChatService::new(db);
         
-        // 更新 OpenAI 配置
+        // Update OpenAI config
         let mut chat_service = chat_service;
         chat_service.update_openai_config(
             openai_config.api_key,
@@ -173,29 +181,39 @@ async fn send_message(
             openai_config.temperature,
         );
         
-        // 使用 block_on 执行异步的 send_message
+        // Use block_on to execute async send_message
         let rt = tokio::runtime::Handle::current();
         rt.block_on(async {
             chat_service.send_message(&conversation_id, &content).await
         })
-    }).await.map_err(|e| format!("任务执行失败: {}", e))?;
+    }).await.map_err(|e| {
+        log::error!("Task execution failed: {}", e);
+        format!("Task execution failed: {}", e)
+    })?;
     
     match result {
-        Ok(response) => Ok(SendMessageResponse {
-            id: response.message.id,
-            content: response.message.content,
-            role: response.message.role,
-            conversation_id: response.message.conversation_id,
-            timestamp: response.message.created_at,
-            prompt_tokens: response.message.prompt_tokens,
-            completion_tokens: response.message.completion_tokens,
-            total_tokens: response.message.total_tokens,
-        }),
-        Err(e) => Err(e)
+        Ok(response) => {
+            log::info!("Message sent successfully: id={}, tokens={}", 
+                response.message.id, response.message.total_tokens);
+            Ok(SendMessageResponse {
+                id: response.message.id,
+                content: response.message.content,
+                role: response.message.role,
+                conversation_id: response.message.conversation_id,
+                timestamp: response.message.created_at,
+                prompt_tokens: response.message.prompt_tokens,
+                completion_tokens: response.message.completion_tokens,
+                total_tokens: response.message.total_tokens,
+            })
+        },
+        Err(e) => {
+            log::error!("Send message failed: {}", e);
+            Err(e)
+        }
     }
 }
 
-// ============ Token 统计命令 ============
+// ============ Token Statistics Commands ============
 
 #[tauri::command]
 fn get_token_usage_summary(
@@ -206,7 +224,7 @@ fn get_token_usage_summary(
     let chat_service = state.chat_service.lock().unwrap();
     chat_service.get_token_tracker()
         .get_summary(start_date.as_deref(), end_date.as_deref())
-        .map_err(|e| format!("获取 Token 统计失败: {}", e))
+        .map_err(|e| format!("Get token summary failed: {}", e))
 }
 
 #[tauri::command]
@@ -217,10 +235,10 @@ fn get_token_usage_trend(
     let chat_service = state.chat_service.lock().unwrap();
     chat_service.get_token_tracker()
         .get_daily_trend(days.unwrap_or(30))
-        .map_err(|e| format!("获取 Token 趋势失败: {}", e))
+        .map_err(|e| format!("Get token trend failed: {}", e))
 }
 
-// ============ OpenAI 配置命令 ============
+// ============ OpenAI Config Commands ============
 
 #[tauri::command]
 fn get_openai_config(
@@ -233,23 +251,43 @@ fn get_openai_config(
 #[tauri::command]
 fn save_openai_config(
     config: OpenAIConfig,
+    app_handle: tauri::AppHandle,
     state: tauri::State<'_, AppState>
 ) -> Result<(), String> {
-    // 更新内存中的配置
+    log::info!("Saving OpenAI config: model={}, api_base={}", config.model, config.api_base);
+    
+    // Update memory config
     {
         let mut openai_config = state.openai_config.lock().unwrap();
         *openai_config = config.clone();
     }
     
-    // 更新 ChatService 中的 OpenAI 客户端配置
-    // 注意：由于 update_openai_config 是异步的，而 ChatService 不支持 Send
-    // 这里暂时跳过 OpenAI 客户端配置的更新
-    // TODO: 重构 ChatService 以支持 Send 后启用
-    println!("OpenAI配置已更新（内存中）");
+    // Sync to ConfigManager (update the remote model config)
+    let config_manager = app_handle.state::<std::sync::Mutex<ConfigManager>>();
+    let mut manager = config_manager.lock().unwrap();
+    
+    manager.update_section(|app_config| {
+        // Find and update the current remote model
+        let current_model_id = &app_config.model_selector.current_model;
+        if let Some(remote_model) = app_config.remote_models.iter_mut()
+            .find(|m| &m.id == current_model_id)
+        {
+            remote_model.api_key = config.api_key.clone();
+            remote_model.api_url = config.api_base.clone();
+            remote_model.model = config.model.clone();
+            remote_model.temperature = Some(config.temperature);
+        }
+        Ok::<(), Box<dyn std::error::Error>>(())
+    }).map_err(|e| {
+        log::error!("Failed to sync config to ConfigManager: {}", e);
+        format!("Failed to sync config: {}", e)
+    })?;
+    
+    log::info!("OpenAI config saved and synced to ConfigManager");
     Ok(())
 }
 
-// ============ 数据库测试命令 ============
+// ============ Database Test Command ============
 
 #[tauri::command]
 fn test_database(
@@ -257,89 +295,116 @@ fn test_database(
 ) -> Result<String, String> {
     let chat_service = state.chat_service.lock().unwrap();
     
-    // 测试创建会话
-    let conversation = chat_service.create_conversation("测试会话".to_string(), None)?;
+    // Test create conversation
+    let conversation = chat_service.create_conversation("Test Conversation".to_string(), None)?;
     
-    // 测试发送消息
-    let _message = chat_service.send_message_simple(&conversation.id, "测试消息")?;
+    // Test send message
+    let _message = chat_service.send_message_simple(&conversation.id, "Test message")?;
     
-    // 测试获取消息
+    // Test get messages
     let messages = chat_service.get_messages(&conversation.id, 10, 0)?;
     
-    // 删除测试会话
+    // Delete test conversation
     chat_service.delete_conversation(&conversation.id)?;
     
-    Ok(format!("数据库测试成功! 创建会话、发送 {} 条消息、删除会话均正常", messages.len()))
+    Ok(format!("Database test successful! Created conversation, sent {} messages, deleted conversation", messages.len()))
 }
 
-// ============ 主函数 ============
+// ============ Main Function ============
 
 fn main() {
+    // Initialize logging
+    env_logger::Builder::from_default_env()
+        .filter_level(log::LevelFilter::Info)
+        .format_timestamp_secs()
+        .init();
+    
+    log::info!("Malou Agent starting...");
+    
     tauri::Builder::default()
         .setup(|app| {
-            println!("Malou Agent桌面应用启动成功!");
-            println!("应用路径: {:?}", app.path().app_data_dir());
+            // Initialize config manager first
+            let config_manager = match ConfigManager::new(app.app_handle()) {
+                Ok(cm) => cm,
+                Err(e) => {
+                    log::error!("Config manager init failed: {}", e);
+                    return Err(format!("Config manager init failed: {}", e).into());
+                }
+            };
             
-            // 初始化数据库
-            let db_path = get_default_db_path();
-            println!("数据库路径: {:?}", db_path);
-            
-            let db = Database::new(db_path)
-                .map_err(|e| format!("数据库初始化失败: {}", e))?;
-            
-            println!("数据库初始化成功");
-            
-            // 创建 ChatService
-            let chat_service = ChatService::new(db.clone());
-            
-            // 创建应用状态
-            let app_state = AppState {
-                db: Arc::new(Mutex::new(db)),
-                chat_service: Mutex::new(chat_service),
-                openai_config: Mutex::new(OpenAIConfig {
+            // Load OpenAI config from saved remote model config
+            let openai_config = if let Some(CurrentModel::Remote(remote_model)) = config_manager.get_current_model() {
+                log::info!("Loaded remote model config: id={}, model={}", remote_model.id, remote_model.model);
+                OpenAIConfig {
+                    api_key: remote_model.api_key,
+                    api_base: remote_model.api_url,
+                    model: remote_model.model,
+                    temperature: remote_model.temperature.unwrap_or(0.7),
+                }
+            } else {
+                log::warn!("No remote model config found, using defaults");
+                OpenAIConfig {
                     api_key: String::new(),
                     api_base: "https://api.openai.com/v1".to_string(),
                     model: "gpt-3.5-turbo".to_string(),
                     temperature: 0.7,
-                }),
+                }
+            };
+            
+            log::info!("OpenAI config loaded: model={}, api_base={}", openai_config.model, openai_config.api_base);
+            
+            // Register config manager
+            app.manage(Mutex::new(config_manager));
+            
+            // Initialize database
+            let db_path = get_default_db_path();
+            log::info!("Database path: {:?}", db_path);
+            
+            let db = Database::new(db_path)
+                .map_err(|e| {
+                    log::error!("Database init failed: {}", e);
+                    format!("Database init failed: {}", e)
+                })?;
+            
+            log::info!("Database initialized");
+            
+            // Create ChatService
+            let chat_service = ChatService::new(db.clone());
+            
+            // Create application state
+            let app_state = AppState {
+                db: Arc::new(Mutex::new(db)),
+                chat_service: Mutex::new(chat_service),
+                openai_config: Mutex::new(openai_config),
             };
             
             app.manage(app_state);
             
-            // 初始化配置管理器（ONNX 配置等）
-            match ConfigManager::new(app.app_handle()) {
-                Ok(config_manager) => {
-                    app.manage(Mutex::new(config_manager));
-                    println!("配置管理器初始化成功");
-                }
-                Err(e) => {
-                    eprintln!("配置管理器初始化失败: {}", e);
-                }
-            }
+            log::info!("Malou Agent started successfully!");
             
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            // 基础命令
+            // Basic commands
             get_app_info,
             test_database,
-            // 会话管理
+            // Conversation management
             create_conversation,
             list_conversations,
             get_conversation,
             update_conversation_title,
             delete_conversation,
-            // 消息管理
+            // Message management
             send_message,
             get_conversation_messages,
             clear_conversation_messages,
-            // Token 统计
+            // Token statistics
             get_token_usage_summary,
             get_token_usage_trend,
-            // OpenAI 配置
+            // OpenAI config
             get_openai_config,
             save_openai_config,
-            // 原有配置管理命令
+            // Config management commands
             config::get_app_config,
             config::update_app_config,
             config::get_current_model_info,
