@@ -83,6 +83,7 @@ impl MessageRepo {
     /// 获取会话的最近 N 条消息（用于构建上下文）
     pub fn get_recent(&self, conversation_id: &str, limit: i32) -> SqliteResult<Vec<Message>> {
         self.db.execute(|conn| {
+            // 使用索引 idx_messages_created_desc 进行高效查询
             let mut stmt = conn.prepare(
                 "SELECT id, conversation_id, role, content, model_id, prompt_tokens, completion_tokens, total_tokens, created_at 
                  FROM messages 

@@ -1,0 +1,28 @@
+{
+  "templateName": "malou-agent-project-structure",
+  "description": "malou-agent项目标准模板",
+  "frontend": {
+    "framework": "vue3",
+    "language": "typescript",
+    "build-tool": "vite",
+    "state-management": "pinia",
+    "ui-framework": "element-plus"
+  },
+  "backend": {
+    "language": "rust",
+    "framework": "tauri",
+    "database": "sqlite",
+    "ai-integration": "onnx-runtime"
+  },
+  "project-structure": {
+    "src": ["components/", "api/", "utils/"],
+    "src-tauri": ["src/", "Cargo.toml"],
+    "docs": ["api/", "deployment/", "architecture/"],
+    "config": ["package.json", "tsconfig.json", "vite.config.ts"]
+  },
+  "ai-memory": {
+    "config": ".ai-memory/config.json",
+    "shared": ".ai-memory/shared/",
+    "monitoring": ".ai-memory/monitoring/"
+  }
+}

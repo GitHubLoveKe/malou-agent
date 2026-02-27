@@ -1,0 +1,49 @@
+{
+  "version": "1.0.0",
+  "system": {
+    "name": "malou-agent-memory-system",
+    "description": "malou-agent项目专用AI记忆系统",
+    "created": "2025-02-26T00:00:00Z",
+    "lastUpdated": "2025-02-26T00:00:00Z",
+    "project": "malou-agent"
+  },
+  "memory": {
+    "architecture": {
+      "type": "project-centralized",
+      "storage": {
+        "project": "project-specific-context",
+        "shared": "best-practices-and-templates"
+      }
+    },
+    "sync": {
+      "strategy": "automatic",
+      "realTime": ["active-tasks", "recent-changes"],
+      "interval": "5m"
+    },
+    "retention": {
+      "activeData": "30d",
+      "archivedData": "90d",
+      "bestPractices": "permanent"
+    }
+  },
+  "performance": {
+    "cache": {
+      "enabled": true,
+      "strategy": "lru",
+      "size": "50MB",
+      "ttl": "1h"
+    },
+    "loading": {
+      "priority": {
+        "high": ["current-task", "recent-changes"],
+        "medium": ["project-structure", "dependencies"],
+        "low": ["historical-contexts"]
+      },
+      "maxContextSize": "5MB"
+    }
+  },
+  "monitoring": {
+    "enabled": true,
+    "metrics": ["load-time", "accuracy", "memory-usage"]
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "malou-agent",
+    "type": "desktop-application",
+    "framework": "tauri-vue-rust",
+    "status": "active-development"
+  },
+  "memory": {
+    "structure": {
+      "plans": "project-plans-and-roadmaps",
+      "rules": "development-rules-and-guidelines",
+      "contexts": "session-specific-contexts",
+      "snapshots": "project-state-snapshots"
+    },
+    "retention": {
+      "plans": "long-term",
+      "rules": "long-term",
+      "contexts": "session-only",
+      "snapshots": "30-days"
+    },
+    "autoLoad": ["plans", "rules"],
+    "priority": {
+      "high": ["current-plan", "active-rules"],
+      "medium": ["project-structure", "dependencies"],
+      "low": ["historical-contexts"]
+    }
+  },
+  "indexes": {
+    "filePatterns": [
+      "README.md",
+      "PROJECT_*.md",
+      "docs/*.md",
+      "src/**/*.vue",
+      "src/**/*.ts",
+      "src-tauri/src/**/*.rs",
+      "package.json",
+      "Cargo.toml"
+    ],
+    "keywords": [
+      "tauri", "vue", "rust", "sqlite", "onnx", 
+      "chat", "document", "config", "database"
+    ]
+  },
+  "lastUpdated": "2025-02-26T00:00:00Z"
+}

@@ -31,6 +31,12 @@ CREATE TABLE IF NOT EXISTS messages (
 -- 消息索引：按会话和时间排序
 CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, created_at ASC);
 
+-- 消息索引：按时间倒序（用于获取最近消息）
+CREATE INDEX IF NOT EXISTS idx_messages_created_desc ON messages(conversation_id, created_at DESC);
+
+-- 消息索引：按角色和会话（用于统计）
+CREATE INDEX IF NOT EXISTS idx_messages_role_conv ON messages(role, conversation_id);
+
 -- Token 使用统计表
 CREATE TABLE IF NOT EXISTS token_usage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

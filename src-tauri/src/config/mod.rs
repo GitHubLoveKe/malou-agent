@@ -5,6 +5,9 @@ use std::fs;
 use std::path::PathBuf;
 use tauri::Manager;
 
+// 加密模块
+use crate::crypto::GLOBAL_CRYPTO;
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LocalModelConfig {
     pub id: String,

@@ -1,9 +1,16 @@
 ---
 name: malou-agent-fix-plan
-overview: 修复 Malou Agent Desktop 4个问题：布局优化、API调用修复、日志系统、Mac风格UI
+version: 2.0.0
+overview: 修复 Malou Agent Desktop 核心问题：布局优化、API调用修复、日志系统、Mac风格UI、记忆系统优化
+status: completed
+priority: high
+dateCreated: 2025-02-25
+dateUpdated: 2025-02-26
 design:
   architecture:
     framework: vue
+    backend: rust
+    database: sqlite
   styleKeywords:
     - Glassmorphism
     - MacOS Style
@@ -37,23 +44,40 @@ design:
       - "#FF3B30"
       - "#34C759"
       - "#FF9500"
+memory:
+  autoLoad: true
+  priority: high
+  tags: ["fix", "optimization", "ui", "backend"]
 todos:
   - id: fix-config-sync
     content: 修复后端配置同步问题：从ConfigManager加载配置初始化AppState.openai_config
     status: completed
+    impact: critical
+    effort: medium
   - id: enhance-backend-logging
     content: 增强后端日志：在main.rs初始化logger，关键函数添加日志
     status: completed
     dependencies:
       - fix-config-sync
+    impact: high
+    effort: low
   - id: fix-frontend-layout
     content: 修复前端布局：移除el-container，使用flex布局
     status: completed
+    impact: high
+    effort: medium
   - id: redesign-mac-ui
     content: 重构UI为Mac风格：重写App.vue和组件样式
     status: completed
     dependencies:
       - fix-frontend-layout
+    impact: medium
+    effort: high
+  - id: optimize-memory-system
+    content: 优化agent记忆系统：创建知识库索引、标准化记忆结构
+    status: completed
+    impact: high
+    effort: medium
 ---
 
 ## 需求概述

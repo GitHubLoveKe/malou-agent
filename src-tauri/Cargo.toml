@@ -25,3 +25,9 @@ reqwest = { version = "0.12", features = ["json", "blocking"] }
 # Logging
 log = "0.4"
 env_logger = "0.11"
+# Encryption
+ring = "0.17"
+base64 = "0.21"
+lazy_static = "1.4"
+# Validation
+regex = "1.0"

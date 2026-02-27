@@ -6,10 +6,14 @@ mod config;
 mod database;
 mod chat;
 mod token_tracker;
+mod crypto;
+mod validation;
+mod error;
 
 use config::{ConfigManager, CurrentModel};
 use database::{Database, get_default_db_path, Conversation, Message, TokenSummary, DailyTokenUsage};
 use chat::ChatService;
+use crate::error::{AppResult, TauriResultExt, AppError};
 
 // ============ Data Structures ============
 
@@ -75,7 +79,7 @@ fn create_conversation(
     state: tauri::State<'_, AppState>
 ) -> Result<Conversation, String> {
     let chat_service = state.chat_service.lock().unwrap();
-    chat_service.create_conversation(title, None)
+    chat_service.create_conversation(title, None).to_tauri_result()
 }
 
 #[tauri::command]
@@ -85,7 +89,7 @@ fn list_conversations(
     state: tauri::State<'_, AppState>
 ) -> Result<Vec<Conversation>, String> {
     let chat_service = state.chat_service.lock().unwrap();
-    chat_service.list_conversations(limit.unwrap_or(50), offset.unwrap_or(0))
+    chat_service.list_conversations(limit.unwrap_or(50), offset.unwrap_or(0)).to_tauri_result()
 }
 
 #[tauri::command]
@@ -94,7 +98,7 @@ fn get_conversation(
     state: tauri::State<'_, AppState>
 ) -> Result<Option<Conversation>, String> {
     let chat_service = state.chat_service.lock().unwrap();
-    chat_service.get_conversation(&id)
+    chat_service.get_conversation(&id).to_tauri_result()
 }
 
 #[tauri::command]
@@ -104,7 +108,7 @@ fn update_conversation_title(
     state: tauri::State<'_, AppState>
 ) -> Result<(), String> {
     let chat_service = state.chat_service.lock().unwrap();
-    chat_service.update_conversation_title(&id, &title)
+    chat_service.update_conversation_title(&id, &title).to_tauri_result()
 }
 
 #[tauri::command]
@@ -113,7 +117,10 @@ fn delete_conversation(
     state: tauri::State<'_, AppState>
 ) -> Result<bool, String> {
     let chat_service = state.chat_service.lock().unwrap();
-    chat_service.delete_conversation(&id)
+    match chat_service.delete_conversation(&id) {
+        Ok(result) => Ok(result),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 // ============ Message Management Commands ============
@@ -126,7 +133,10 @@ fn get_conversation_messages(
     state: tauri::State<'_, AppState>
 ) -> Result<Vec<Message>, String> {
     let chat_service = state.chat_service.lock().unwrap();
-    chat_service.get_messages(&conversation_id, limit.unwrap_or(100), offset.unwrap_or(0))
+    match chat_service.get_messages(&conversation_id, limit.unwrap_or(100), offset.unwrap_or(0)) {
+        Ok(messages) => Ok(messages),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 #[tauri::command]
@@ -135,7 +145,10 @@ fn clear_conversation_messages(
     state: tauri::State<'_, AppState>
 ) -> Result<i32, String> {
     let chat_service = state.chat_service.lock().unwrap();
-    chat_service.clear_conversation(&conversation_id)
+    match chat_service.clear_conversation(&conversation_id) {
+        Ok(count) => Ok(count),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 #[tauri::command]
@@ -164,11 +177,11 @@ async fn send_message(
     // Execute in blocking thread
     let result = tokio::task::spawn_blocking(move || {
         // Create new database connection
-        let db = Database::new(db_path)
-            .map_err(|e| {
-                log::error!("Database connection failed: {}", e);
-                format!("Database connection failed: {}", e)
-            })?;
+            let db = Database::new(db_path)
+                .map_err(|e| {
+                    log::error!("Database connection failed: {}", e);
+                    AppError::DatabaseError(format!("Database connection failed: {}", e))
+                })?;
         
         let chat_service = ChatService::new(db);
         
@@ -208,7 +221,7 @@ async fn send_message(
         },
         Err(e) => {
             log::error!("Send message failed: {}", e);
-            Err(e)
+            Err(e.to_string())
         }
     }
 }
@@ -296,16 +309,20 @@ fn test_database(
     let chat_service = state.chat_service.lock().unwrap();
     
     // Test create conversation
-    let conversation = chat_service.create_conversation("Test Conversation".to_string(), None)?;
+    let conversation = chat_service.create_conversation("Test Conversation".to_string(), None)
+        .map_err(|e| e.to_string())?;
     
     // Test send message
-    let _message = chat_service.send_message_simple(&conversation.id, "Test message")?;
+    let _message = chat_service.send_message_simple(&conversation.id, "Test message")
+        .map_err(|e| e.to_string())?;
     
     // Test get messages
-    let messages = chat_service.get_messages(&conversation.id, 10, 0)?;
+    let messages = chat_service.get_messages(&conversation.id, 10, 0)
+        .map_err(|e| e.to_string())?;
     
     // Delete test conversation
-    chat_service.delete_conversation(&conversation.id)?;
+    chat_service.delete_conversation(&conversation.id)
+        .map_err(|e| e.to_string())?;
     
     Ok(format!("Database test successful! Created conversation, sent {} messages, deleted conversation", messages.len()))
 }
@@ -320,6 +337,12 @@ fn main() {
         .init();
     
     log::info!("Malou Agent starting...");
+    
+    // Initialize encryption
+    if let Err(e) = crypto::GLOBAL_CRYPTO.initialize() {
+        log::error!("Failed to initialize encryption: {}", e);
+        panic!("Encryption initialization failed: {}", e);
+    }
     
     tauri::Builder::default()
         .setup(|app| {

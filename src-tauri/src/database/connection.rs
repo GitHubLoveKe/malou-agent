@@ -25,6 +25,21 @@ impl Database {
         // 启用 WAL 模式以提高并发性能
         conn.execute_batch("PRAGMA journal_mode = WAL;")?;
         
+        // 设置 WAL 自动检查点
+        conn.execute_batch("PRAGMA wal_autocheckpoint = 1000;")?;
+        
+        // 设置缓存大小（16MB）
+        conn.execute_batch("PRAGMA cache_size = -16000;")?;
+        
+        // 启用内存映射I/O
+        conn.execute_batch("PRAGMA mmap_size = 268435456;")?; // 256MB
+        
+        // 设置同步模式为NORMAL（性能和安全性平衡）
+        conn.execute_batch("PRAGMA synchronous = NORMAL;")?;
+        
+        // 设置临时文件存储模式为内存
+        conn.execute_batch("PRAGMA temp_store = MEMORY;")?;
+        
         let db = Self {
             conn: Arc::new(Mutex::new(conn)),
         };

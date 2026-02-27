@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted, computed } from 'vue'
+import { ref, watch, nextTick, onMounted, computed, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { 
   sendMessage, 
@@ -11,6 +11,7 @@ import {
   type Message as ApiMessage
 } from '@/api/tauri-api'
 import { logger } from '@/utils/logger'
+import { validateChatMessage, sanitizeInput } from '@/utils/input-validator'
 import type { AppConfig } from '@/config'
 
 interface DisplayMessage {
@@ -34,6 +35,13 @@ const messages = ref<DisplayMessage[]>([])
 const inputMessage = ref('')
 const isLoading = ref(false)
 const messagesContainer = ref<HTMLElement | null>(null)
+
+// 虚拟滚动相关变量
+const visibleMessages = ref<DisplayMessage[]>([])
+const scrollTop = ref(0)
+const messageHeight = 80 // 估算每条消息高度
+const bufferSize = 10 // 缓冲区大小
+const resizeObserver = ref<ResizeObserver | null>(null)
 
 // Model selection
 const appConfig = ref<AppConfig | null>(null)
@@ -138,13 +146,77 @@ const loadMessages = async () => {
   }
 }
 
+// 计算可见消息
+const calculateVisibleMessages = () => {
+  if (!messagesContainer.value || messages.value.length === 0) {
+    visibleMessages.value = messages.value
+    return
+  }
+
+  const containerHeight = messagesContainer.value.clientHeight
+  const startIndex = Math.max(0, Math.floor(scrollTop.value / messageHeight) - bufferSize)
+  const endIndex = Math.min(
+    messages.value.length - 1,
+    startIndex + Math.ceil(containerHeight / messageHeight) + bufferSize * 2
+  )
+
+  visibleMessages.value = messages.value.slice(startIndex, endIndex + 1)
+}
+
+// 处理滚动事件
+const handleScroll = () => {
+  if (!messagesContainer.value) return
+  scrollTop.value = messagesContainer.value.scrollTop
+  calculateVisibleMessages()
+}
+
+// 初始化虚拟滚动
+const initVirtualScroll = () => {
+  if (!messagesContainer.value) return
+  
+  // 监听容器大小变化
+  resizeObserver.value = new ResizeObserver(() => {
+    calculateVisibleMessages()
+  })
+  resizeObserver.value.observe(messagesContainer.value)
+  
+  // 监听滚动事件
+  messagesContainer.value.addEventListener('scroll', handleScroll)
+}
+
+// 销毁虚拟滚动
+const destroyVirtualScroll = () => {
+  if (resizeObserver.value) {
+    resizeObserver.value.disconnect()
+    resizeObserver.value = null
+  }
+  
+  if (messagesContainer.value) {
+    messagesContainer.value.removeEventListener('scroll', handleScroll)
+  }
+}
+
 // Watch conversation changes
 watch(() => props.conversation, () => {
   loadMessages()
 }, { immediate: true })
 
+// Watch messages changes for virtual scroll
+watch(messages, () => {
+  nextTick(() => {
+    calculateVisibleMessages()
+  })
+})
+
 onMounted(() => {
   loadConfig()
+  nextTick(() => {
+    initVirtualScroll()
+  })
+})
+
+onUnmounted(() => {
+  destroyVirtualScroll()
 })
 
 // Scroll to bottom
@@ -162,7 +234,15 @@ const handleSendMessage = async () => {
     return
   }
   
-  const userContent = inputMessage.value.trim()
+  // 验证输入内容
+  const validationResult = validateChatMessage(inputMessage.value)
+  if (!validationResult.isValid) {
+    ElMessage.warning(validationResult.message)
+    return
+  }
+  
+  // 清理输入内容
+  const userContent = sanitizeInput(validationResult.sanitizedValue || inputMessage.value)
   
   const userMessage: DisplayMessage = {
     id: `temp-${Date.now()}`,
@@ -300,24 +380,35 @@ const formatTime = (date: Date): string => {
     
     <!-- Messages -->
     <div class="chat-messages" ref="messagesContainer">
-      <div 
-        v-for="message in messages" 
-        :key="message.id"
-        :class="['message', message.sender]"
-      >
-        <div class="message-content">
-          <div class="message-bubble">
-            {{ message.content }}
-          </div>
-          <div class="message-meta">
-            <span class="message-time">{{ formatTime(message.timestamp) }}</span>
-            <span class="message-tokens" v-if="message.tokens">{{ message.tokens }} tokens</span>
+      <!-- 虚拟滚动容器 -->
+      <div class="virtual-scroll-container" 
+           :style="{ height: `${messages.length * messageHeight}px` }">
+        
+        <!-- 可见消息 -->
+        <div 
+          v-for="message in visibleMessages" 
+          :key="message.id"
+          :class="['message', message.sender]"
+          :style="{ 
+            position: 'absolute', 
+            top: `${messages.indexOf(message) * messageHeight}px`,
+            width: '100%'
+          }"
+        >
+          <div class="message-content">
+            <div class="message-bubble">
+              {{ message.content }}
+            </div>
+            <div class="message-meta">
+              <span class="message-time">{{ formatTime(message.timestamp) }}</span>
+              <span class="message-tokens" v-if="message.tokens">{{ message.tokens }} tokens</span>
+            </div>
           </div>
         </div>
       </div>
       
-      <!-- Loading -->
-      <div v-if="isLoading" class="message ai">
+      <!-- Loading (固定在底部) -->
+      <div v-if="isLoading" class="message ai loading-message">
         <div class="message-content">
           <div class="message-bubble typing-indicator">
             <span></span>
@@ -448,9 +539,18 @@ const formatTime = (date: Date): string => {
   flex: 1;
   overflow-y: auto;
   padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  position: relative;
+}
+
+.virtual-scroll-container {
+  position: relative;
+}
+
+.loading-message {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  right: 24px;
 }
 
 .message {

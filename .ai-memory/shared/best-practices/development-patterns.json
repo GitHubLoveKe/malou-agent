@@ -1,0 +1,32 @@
+{
+  "projectName": "malou-agent",
+  "bestPractices": {
+    "frontend": {
+      "vue": {
+        "composition-api": "优先使用组合式API",
+        "state-management": "使用Pinia进行状态管理",
+        "component-structure": "按功能模块组织组件"
+      },
+      "typescript": {
+        "strict-mode": "启用严格模式",
+        "interface-usage": "优先使用接口而非类型别名"
+      }
+    },
+    "backend": {
+      "rust": {
+        "error-handling": "使用Result进行错误处理",
+        "async-await": "异步编程最佳实践",
+        "memory-management": "所有权和借用规则"
+      },
+      "tauri": {
+        "command-structure": "命令式API设计",
+        "frontend-backend": "前后端通信规范"
+      }
+    },
+    "ai-integration": {
+      "memory-management": "项目状态和配置的自动记忆",
+      "tool-support": "支持任意AI工具的无缝切换",
+      "conflict-resolution": "基于时间戳的智能冲突处理"
+    }
+  }
+}
