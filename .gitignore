@@ -20,6 +20,6 @@ target
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 node_modules
-node_modules
 dist
 src-tauri/target
+package-lock.json
